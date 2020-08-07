@@ -1,0 +1,245 @@
+---
+title: "Final"
+authors: "Sharmaine Cameron, Sonya Radichkova, Ian K"
+date: "May 18, 2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Data Preparation
+
+The first step of any data science project is to either collect data or find a dataset to use. Here, we are using a dataset titled "Student Alchohol Consumption", avalable at https://www.kaggle.com/uciml/student-alcohol-consumption/data. This dataset contains survey results and grade statistics from secondary school students. After downloading "student-mat.csv", we can import it and check it out with the following code.
+
+```{r}
+library(tidyverse)
+library(rvest)
+library(dplyr)
+library(kableExtra)
+mydata <- read.csv("~/Downloads/student-mat.csv")
+summary(mydata)
+```
+We can immediately see that there are quite a lot of statistics beyond just alchohol consumption here. Before proceeding, we will pick a subset of these for use in our analysis. I've picked age, famsize, Pstatus, Medu, Fedu, traveltime, studytime, activities, higher, internet, romantic, and of course the grade stats G1, G2, and G3. If you are confused as to what these attributes represent, remember that you can see a full explanation at https://www.kaggle.com/uciml/student-alcohol-consumption/data. Below is the code for removing the attributes we won't be using (or more accurately, selecting the attributes we will be using).
+```{r}
+mydata <- mydata %>% select(age, famsize, Pstatus, Medu, Fedu, traveltime, studytime, activities, higher, internet, romantic,G1,G2,G3)
+summary(mydata)
+```
+Luckily for us, it looks like this data is already tidy. Tidy data is data such that each entity (in this case student) has their own seperate row, and their attributes are represented by each column. If this data were not tidy, fixing that would be the next step, but since it is we can work on another problem. This data set has its categorical data represented as characters. We can reformat as factor using the code below.
+```{r}
+mydata$famsize <- as.factor(mydata$famsize)
+mydata$Pstatus <- as.factor(mydata$Pstatus)
+mydata$activities <- as.factor(mydata$activities)
+mydata$higher <- as.factor(mydata$higher)
+mydata$internet <- as.factor(mydata$internet)
+mydata$romantic <- as.factor(mydata$romantic)
+summary(mydata)
+```
+As you can see, we now have categorical data, giving us a better view of what the famsize, Pstatus, activities, higher, internet, and romantic attributes look like. Next, I think it's a good idea to combine the grade statistics into one "average grade" attribute in order to make comparing student's grades easier.
+```{r}
+mydata<-transform(mydata, averagegrade= (G1+G2+G3)/3)
+mydata <- mydata %>% select(age, famsize, Pstatus, Medu, Fedu, traveltime, studytime, activities, higher, internet, romantic,averagegrade)
+head(mydata)
+```
+We also did a quick select to get rid of G1, G2, and G3 since we'll be using averagegrade. It looks like our data is finally prepared, and we're ready to move on. 
+
+# EDA
+EDA, short for exploratory data analysis, is the process by which data scientists get a feel for trends within datasets. EDA allows you to understand how different variables are related. In this project, we are interested in determining which factors have the largest impact on a student's average grade. In order to determine this, we're going to graph each attribute against averagegrade, starting with age. Each graph takes the average of student's averagegrade statistic based on another attribute.
+```{r}
+age <- mydata %>%
+  group_by(age) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=age, y=Mean_Average_Grade)) +
+    geom_point() +
+    labs(x = "Age",
+         y = "Average Grade") +
+    ggtitle("Age vs Grade")
+age
+```
+This graph groups students by their age and determines the mean grade rating for each group. There is a steady decline in average grade as age increases, besides an outlier at 20. Considering that this is a small dataset, this is to be expected. Let's continue down the line and look at famsize.
+```{r}
+fs <- mydata %>%
+  group_by(famsize) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=famsize, y=Mean_Average_Grade)) +
+    geom_col() +
+    labs(x = "Family Size",
+         y = "Average Grade") +
+    ggtitle("Family Size vs Grade")
+fs
+```
+Looks like students with a family size less than or equal to 3 have a slightly higher average grade, but not by much. Let's do Pstatus next.
+```{r}
+ps <- mydata %>%
+  group_by(Pstatus) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=Pstatus, y=Mean_Average_Grade)) +
+    geom_col() +
+    labs(x = "Pstatus",
+         y = "Average Grade") +
+    ggtitle("Parental Status vs Grade")
+ps
+```
+Interestingly, students whose parents are apart have a slightly higher average. This could have something to do with the relatively small number of students in this category (only 41). Next is mother's education.
+```{r}
+me <- mydata %>%
+  group_by(Medu) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=Medu, y=Mean_Average_Grade)) +
+    geom_point() +
+    labs(x = "Medu",
+         y = "Average Grade") +
+    ggtitle("Mother's Education vs Grade")
+me
+```
+The scale here is: 0 - none, 1 - primary education (4th grade), 2 – 5th to 9th grade, 3 – secondary education or 4 – higher education
+As mother's education increases, so does average grade. Looks like this would be a good stat to use in our predictions. Except, we have another strange result when Medu is zero, likely another outlier created from the smallness of the dataset. Next is father's education.
+```{r}
+fe <- mydata %>%
+  group_by(Fedu) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=Fedu, y=Mean_Average_Grade)) +
+    geom_point() +
+    labs(x = "Fedu",
+         y = "Average Grade") +
+    ggtitle("Father's Education vs Grade")
+fe
+```
+The scale is again: The scale here is: 0 - none, 1 - primary education (4th grade), 2 – 5th to 9th grade, 3 – secondary education or 4 – higher education
+The results are very similar to the Medu graph. Fedu is another contender for use in prediction. Next is traveltime.
+```{r}
+tt <- mydata %>%
+  group_by(traveltime) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=traveltime, y=Mean_Average_Grade)) +
+    geom_point() +
+    labs(x = "traveltime (in hours)",
+         y = "Average Grade") +
+    ggtitle("Travel Time vs Grade")
+tt
+```
+Traveltime measures the number of hours students have to travel to get to school. As travel time increases, average grade goes down significantly. We should consider using this for prediction. Next is studytime.
+```{r}
+st <- mydata %>%
+  group_by(studytime) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=studytime, y=Mean_Average_Grade)) +
+    geom_point() +
+    labs(x = "studytime",
+         y = "Average Grade") +
+    ggtitle("Time Spent Studying vs Grade")
+st
+```
+This graphs students based on the number of hours they study per week. We can see here there is a significant difference between students who study 1-2 hours and students who study 3-4. Next is actvities.
+```{r}
+act <- mydata %>%
+  group_by(activities) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=activities, y=Mean_Average_Grade)) +
+    geom_col() +
+    labs(x = "activities",
+         y = "Average Grade") +
+    ggtitle("Activity Participation vs Grade")
+act
+```
+The difference is very small. Whether a student does after school activities doesn't have a big impact on their grades. Next is higher.
+```{r}
+hi <- mydata %>%
+  group_by(higher) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=higher, y=Mean_Average_Grade)) +
+    geom_col() +
+    labs(x = "higher",
+         y = "Average Grade") +
+    ggtitle("Desire for Higher Education vs Grade")
+hi
+```
+This chart compares the average grades of students who do not plan on going into higher education and those who do. Students who express desire to go into higher education perform better than those who do not by a considerable margin. We should probably use this in our prediction. Next is internet.
+```{r}
+int <- mydata %>%
+  group_by(internet) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=internet, y=Mean_Average_Grade)) +
+    geom_col() +
+    labs(x = "internet",
+         y = "Average Grade") +
+    ggtitle("Internet Access vs Grade")
+int
+```
+We can see the difference between students with internet access and without here. There is a small but present correlation between internet access and grade. Next is romantic.
+```{r}
+ro <- mydata %>%
+  group_by(romantic) %>%
+  summarize(Mean_Average_Grade = mean(averagegrade)) %>%
+  ggplot(mapping=aes(x=romantic, y=Mean_Average_Grade)) +
+    geom_col() +
+    labs(x = "romantic",
+         y = "Average Grade") +
+    ggtitle("Presence of a Romantic Partner vs Grade")
+ro
+```
+The romantic stat represents whether a student is in a romantic relationship or not. There is yet again a small correllation, with students in romantic relationships doing slightly worse.
+
+Through EDA, we've found that certain statistics are much more closely linked to student performance than others. In particular, age, parental education, travel time, time spent studying, and desire for higher education seem to have the greatest impact. Now that we know that, we can make sure to include these stats in our prediction model.
+
+
+
+
+# Linear Regression
+We will be using linear regression in order to conduct hypothesis testing. We chose linear regression instead of logistic regression since averagegrade is a continuous numeric attribute rather than a binary value of 0 or 1. 
+Our null hypothesis is that none of the factors have an impact on student grades.
+We will be using linear regression to predict the possible outcome for average grades among students with a rejection threshold of 0.05. Looking at the table below in the estimate column, for parent's education, especially the mother's, we see that student's average grades increase by around one point the higher the education of the parent. We test to see if we accept or reject our null hypothesis by comparing the p value column to our rejection threshold. In doing so, we see that all factors have P values greater than the rejection threshold except for activities, studytime, higher, and romantic. This implies that activities, studytime, higher, and romantic are statistically significant, allowing us to reject the null hypothesis that none of the factors have an impact on student grades.
+
+
+```{r}
+library(broom)
+glm.mod = lm(averagegrade ~ age  + factor(famsize) + factor(Medu) +factor(Fedu) + traveltime +
+                studytime + factor(activities) + factor(higher) +
+                factor(internet) + factor(romantic), data = mydata)
+tidy(glm.mod)
+```
+
+
+# Random Forest 
+For the predictions, we're using a commonly known method as the Random Forest Method. It takes the average from multiple decision trees (which vary in depth) after resampling the training data at random. Because of the randomness of these trees and how resampling takes place multiple times, this helps ensure more accurate predictions.
+
+We take our data and sample it, splitting it 60/40 and placing those parts in our training and test sets, respectively. We then create a forest of 1000 trees. According to the graph, by the time we've passed 200 trees, the rate of error stays roughly the same, if not slightly decreasing.
+```{r}
+library(randomForest)
+set.seed(1234)
+train_index <- sample(nrow(mydata), .6*nrow(mydata), replace = TRUE)
+train_set <- mydata[train_index,]
+test_set <- mydata[-train_index,]
+
+attribute_cols <- names(mydata)
+attributes <- names(mydata)
+attributes <- attributes[!attributes %in% c("averagegrade")]
+attributes1 <- paste(attributes, collapse = "+") #saves the column names separated by +
+formula_rf <- as.formula(paste("averagegrade", attributes1, sep = " ~ "))
+
+Random_Forest<- randomForest(formula_rf, ntree=1000, importance=TRUE, data=train_set)
+
+plot(Random_Forest) 
+```
+
+After plotting the Random Forest graph we use the importance function in order to see which attribute is the most important in our model by measuring the total decrease in node impurity. According to the table below, parents' educational levels, age, study time and travel time appear to be the most important attributes that may contribute to average grades.
+
+```{r}
+#library(knitr)
+importance_table<- importance(Random_Forest, type = 2)
+kable(round(importance_table, digits=2))
+```
+
+
+
+# Conclusion
+By looking at factors that can affect student grades, schools can use that information in order to determine methods and resources that can help alleviate factors such as longer travel time.
+
+
+References:
+https://www.kaggle.com/uciml/student-alcohol-consumption/data
+https://www.stat.berkeley.edu/~breiman/RandomForests/cc_home.htm
+https://www.simplypsychology.org/p-value.html
+https://towardsdatascience.com/explaining-feature-importance-by-example-of-a-random-forest-d9166011959e
+
